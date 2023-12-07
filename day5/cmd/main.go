@@ -11,12 +11,7 @@ import (
 	"sync"
 )
 
-type Rule struct {
-	SourceStart      int
-	DestinationStart int
-	Range            int
-}
-
+var locations = make([]int, 0)
 var rules = [][]Rule{
 	make([]Rule, 0),
 	make([]Rule, 0),
@@ -27,17 +22,30 @@ var rules = [][]Rule{
 	make([]Rule, 0),
 }
 
-var locations = make([]int, 0)
-
-func (r *Rule) Effects(i int) bool {
-	if i < r.SourceStart {
-		return false
+func main() {
+	seedsRanges := parseInput()
+	var wg sync.WaitGroup
+	for i := 0; i < len(seedsRanges); i = i + 2 {
+		wg.Add(1)
+		fmt.Printf("Starting thread looking at starting number of %v over %v range\n", seedsRanges[i], seedsRanges[i+1])
+		go findClosestLocation(seedsRanges[i], seedsRanges[i+1], &wg)
 	}
-	return (r.SourceStart + r.Range - 1) >= i
+	wg.Wait()
+	lowestAll := slices.Min(locations)
+	fmt.Printf("Lowest found location over all seeds: %v", lowestAll)
 }
 
-func (r *Rule) EvaluateRule(i int) int {
-	return i - r.SourceStart + r.DestinationStart
+func findClosestLocation(start, seedRange int, wg *sync.WaitGroup) {
+	lowest := SeedLocation(start)
+	for i := start; i < start+seedRange; i++ {
+		ii := SeedLocation(i)
+		if ii < lowest {
+			lowest = ii
+		}
+	}
+	locations = append(locations, lowest)
+	fmt.Printf("Finishing thread looking at starting number of %v over %v range. Lowest found: %v\n", start, seedRange, lowest)
+	defer wg.Done()
 }
 
 func SeedLocation(i int) int {
@@ -52,12 +60,38 @@ func SeedLocation(i int) int {
 	return i
 }
 
-func main() {
+// Rules Logic
+type Rule struct {
+	SourceStart      int
+	DestinationStart int
+	Range            int
+}
+
+func (r *Rule) Effects(i int) bool {
+	if i < r.SourceStart {
+		return false
+	}
+	return (r.SourceStart + r.Range - 1) >= i
+}
+func (r *Rule) EvaluateRule(i int) int {
+	return i - r.SourceStart + r.DestinationStart
+}
+
+// Parsing Input
+
+func readInputFile() *os.File {
+	file, err := os.Open("./input.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	return file
+}
+
+func parseInput() []int {
 	input := readInputFile()
 	defer input.Close()
 	scanner := bufio.NewScanner(input)
 
-	//Take Seeds from first line
 	scanner.Scan()
 	seedsString := strings.Split(strings.TrimSpace(strings.Split(scanner.Text(), ":")[1]), " ")
 	seedsRanges := make([]int, 0)
@@ -95,34 +129,5 @@ func main() {
 		rules[rule] = r
 		rule++
 	}
-	var wg sync.WaitGroup
-	for i := 0; i < len(seedsRanges); i = i + 2 {
-		wg.Add(1)
-		fmt.Printf("Starting thread looking at starting number of %v over %v range\n", seedsRanges[i], seedsRanges[i+1])
-		go lowestInRange(seedsRanges[i], seedsRanges[i+1], &wg)
-	}
-	wg.Wait()
-	lowestAll := slices.Min(locations)
-	fmt.Printf("Lowest found location over all seeds: %v", lowestAll)
-}
-
-func lowestInRange(start, seedRange int, wg *sync.WaitGroup) {
-	lowest := SeedLocation(start)
-	for i := start; i < start+seedRange; i++ {
-		ii := SeedLocation(i)
-		if ii < lowest {
-			lowest = ii
-		}
-	}
-	locations = append(locations, lowest)
-	fmt.Printf("Finishing thread looking at starting number of %v over %v range. Lowest found: %v\n", start, seedRange, lowest)
-	defer wg.Done()
-}
-
-func readInputFile() *os.File {
-	file, err := os.Open("./input.txt")
-	if err != nil {
-		log.Fatal(err)
-	}
-	return file
+	return seedsRanges
 }
