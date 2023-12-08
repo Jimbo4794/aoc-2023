@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"regexp"
-	"sync"
 )
 
 type DesertMap struct {
@@ -19,14 +18,19 @@ type DesertNode struct {
 	Right string
 }
 
+type DesertNodeP struct {
+	Left  *DesertNodeP
+	Right *DesertNodeP
+}
+
 var answerMap = make(map[string]int)
 var locations = make([]string, 0)
 
 func main() {
 	desertMap := parseInput()
 
-	// partAMoves := partAPathFinder(desertMap)
-	// fmt.Printf("Took %v steps to reach ZZZ\n", partAMoves)
+	partAMoves := partAPathFinder(desertMap)
+	fmt.Printf("Took %v steps to reach ZZZ\n", partAMoves)
 	partBMoves := partBPathFinder(desertMap)
 	fmt.Printf("Took %v steps to reach nodes ending in Z\n", partBMoves)
 }
@@ -35,45 +39,68 @@ func partBPathFinder(desertMap DesertMap) int {
 	locations = findStartingLocations(desertMap.Nodes)
 	fmt.Println(locations)
 
+	i := make([]int, 0)
+	for _, loc := range locations {
+		i = append(i, findPathLength(loc, desertMap))
+	}
+
+	return LCM(i)
+}
+
+func GCD(a, b int) int {
+	for b != 0 {
+		temp := b
+		b = a % b
+		a = temp
+	}
+	return a
+}
+
+func LCM(i []int) int {
+	a := i[0]
+	b := i[1]
+	result := a * b / GCD(a, b)
+
+	if len(i) == 2 {
+		return result
+	}
+
+	remainderI := i[2:]
+	remainderI = append(remainderI, result)
+
+	return LCM(remainderI)
+}
+
+func findPathLength(startingLoc string, desertMap DesertMap) int {
+	loc := startingLoc
+	zLoc := ""
 	index := 0
 	counter := 0
-	for !checkAtFinalLocations(locations, counter) {
+	for {
+		// fmt.Println(loc)
 		if index == len(desertMap.Instructions) {
 			index = 0
 		}
-		instruction := desertMap.Instructions[index]
-		var wg sync.WaitGroup
-		for k, v := range locations {
-			wg.Add(1)
-			go setNextLocation(v, desertMap.Nodes, instruction, k, &wg)
+		k := desertMap.Instructions[index]
+
+		if k == 76 {
+			loc = desertMap.Nodes[loc].Left
+		} else {
+			loc = desertMap.Nodes[loc].Right
 		}
-		wg.Wait()
-		counter++
+
+		if loc == zLoc {
+			return counter
+		}
+
+		if loc[2] == 90 {
+			zLoc = loc
+			counter = 0
+		}
+
 		index++
+		counter++
 	}
-
-	return counter
-}
-
-func setNextLocation(currentLoc string, nodes map[string]DesertNode, instruction rune, index int, wg *sync.WaitGroup) {
-	if instruction == 76 {
-		locations[index] = nodes[currentLoc].Left
-	} else {
-		locations[index] = nodes[currentLoc].Right
-	}
-	wg.Done()
-}
-
-func checkAtFinalLocations(locations []string, counter int) bool {
-	for i, v := range locations {
-		if v[2] != 90 {
-			return false
-		}
-		if i > 0 {
-			fmt.Printf("found %v Z - counter: %v\n", i, counter)
-		}
-	}
-	return true
 }
 
 func findStartingLocations(nodes map[string]DesertNode) []string {
@@ -133,6 +160,11 @@ func parseInput() DesertMap {
 			}
 		}
 
+	}
+
+	locs := make([]string, 0)
+	for k, _ := range nodes {
+		locs = append(locs, k)
 	}
 
 	return DesertMap{
